@@ -101,3 +101,10 @@ class Multidispatch implements ArrayAccess
         return $result;
     }
 }
+
+
+function multidispatch(): Multidispatch
+{
+    return new Multidispatch();
+}
+
