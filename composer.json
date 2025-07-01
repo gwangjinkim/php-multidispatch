@@ -7,6 +7,9 @@
         "psr-4": {
             "Multidispatch\\": "src/Multidispatch/"
         }
+        "files": [
+          "src/Multidispatch/Multidispatch.php"
+        ]
     },
     "authors": [
         {
