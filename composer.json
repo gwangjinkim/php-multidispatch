@@ -1,11 +1,11 @@
 {
-    "name": "josephus/php-multidispatch",
+    "name": "gwangjinkim/php-multidispatch",
     "description": "Simple and elegant multiple dispatch for PHP with hierarchy resolution.",
     "type": "library",
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "Multidispatch\\": "src/"
+            "Multidispatch\\": "src/Multidispatch/"
         }
     },
     "authors": [

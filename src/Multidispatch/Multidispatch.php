@@ -103,8 +103,7 @@ class Multidispatch implements ArrayAccess
 }
 
 
-function multidispatch(): Multidispatch
-{
+function multidispatch(): Multidispatch {
     return new Multidispatch();
 }
 
