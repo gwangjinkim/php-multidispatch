@@ -1,7 +1,6 @@
 <?php
 
 use PHPUnit\Framework\TestCase;
-use Multidispatch\Multidispatch;
 use function Multidispatch\multidispatch;
 
 class Animal {}
