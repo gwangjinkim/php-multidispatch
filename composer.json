@@ -1,0 +1,29 @@
+{
+  "name": "gwangjin/php-multidispatch",
+  "description": "Multiple dispatch for PHP — scalar-aware and class hierarchy-sensitive. Inspired by Julia and Common Lisp (CLOS).",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Gwang-Jin Kim",
+      "email": "gwang.jin.kim.phd@gmail.com"
+    }
+  ],
+  "require": {
+    "php": ">=8.1"
+  },
+  "autoload": {
+    "psr-4": {
+      "Multidispatch\\": "src/"
+    },
+    "files": [
+      "src/helpers.php"
+    ]
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10"
+  },
+  "scripts": {
+    "test": "phpunit"
+  }
+}
