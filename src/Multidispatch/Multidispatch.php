@@ -20,11 +20,14 @@ class Multidispatch implements ArrayAccess
      */
     public function offsetSet($offset, $value): void
     {
-        // Support both [type1, type2, ...] and [type1, type2, ...], ':kind'
-        if (is_array($offset) && isset($offset[0]) && is_string($offset[0]) && isset($offset[1]) && $offset[1][0] === ':') {
+        // Handle keys like [[CA::class], ':primary']
+        if (
+            is_array($offset) && count($offset) === 2 &&
+            is_array($offset[0]) && is_string($offset[1]) && str_starts_with($offset[1], ':')
+        ) {
             $sig = $offset[0];
             $kind = $offset[1];
-        } elseif (is_array($offset) && count($offset) > 0) {
+        } elseif (is_array($offset)) {
             $sig = $offset;
             $kind = ':primary';
         } else {
@@ -33,7 +36,7 @@ class Multidispatch implements ArrayAccess
         $key = $this->keyFromTypes($sig);
         $this->methods[$key][$kind] = $value;
     }
-
+    
     public function offsetExists($offset): bool
     {
         $key = $this->keyFromTypes($offset);
