@@ -6,64 +6,20 @@ use ArrayAccess;
 use Exception;
 
 /**
- * Multiple dispatch with CLOS-style method combination.
+ * Multiple Dispatch system with CLOS-style method combinations.
  *
- * Usage: See README or example.php for detailed explanation.
+ * Supports :primary, :before, :after, :around, with proper stacking of :around methods
+ * (from least to most specific, outermost to innermost).
  */
 class Multidispatch implements ArrayAccess
 {
-    // Map: $methods['signature'] = ['kind' => callable, ...]
     private array $methods = [];
 
-    /**
-     * Register a handler for a type signature and kind (:primary, :before, :after, :around).
-     */
-    public function offsetSet($offset, $value): void
-    {
-        // Handle keys like [[CA::class], ':primary']
-        if (
-            is_array($offset) && count($offset) === 2 &&
-            is_array($offset[0]) && is_string($offset[1]) && str_starts_with($offset[1], ':')
-        ) {
-            $sig = $offset[0];
-            $kind = $offset[1];
-        } elseif (is_array($offset)) {
-            $sig = $offset;
-            $kind = ':primary';
-        } else {
-            throw new Exception("Invalid signature for multidispatch registration.");
-        }
-        $key = $this->keyFromTypes($sig);
-        $this->methods[$key][$kind] = $value;
-    }
-    
-    public function offsetExists($offset): bool
-    {
-        $key = $this->keyFromTypes($offset);
-        return isset($this->methods[$key]);
-    }
-
-    public function offsetGet($offset): mixed
-    {
-        $key = $this->keyFromTypes($offset);
-        return $this->methods[$key] ?? throw new Exception("No method for $key");
-    }
-
-    public function offsetUnset($offset): void
-    {
-        $key = $this->keyFromTypes($offset);
-        unset($this->methods[$key]);
-    }
-
-    /**
-     * Dispatch: main entry.
-     */
     public function __invoke(...$args)
     {
-        // Compose and resolve all applicable method combinations
         [$candidates, $resolvedTypes] = $this->resolve($args);
 
-        // Compose stack of :around, run chain (innermost runs all :before, :primary, :after)
+        // Compose core: :before, :primary, :after
         $core = function (...$a) use ($candidates) {
             foreach ($candidates['before'] as $before) { $before(...$a); }
             $result = null;
@@ -76,21 +32,97 @@ class Multidispatch implements ArrayAccess
             return $result;
         };
 
-        // Compose :around stack, from least to most specific (outermost to innermost)
+        // Compose all :around in correct CLOS order: least-specific (outermost) to most-specific (innermost)
         $aroundStack = $candidates['around'];
         $wrapped = array_reduce(
-            $aroundStack, // <-- NO array_reverse!
+            array_reverse($aroundStack),
             function ($next, $around) {
                 return function (...$args) use ($around, $next) {
+                    // $around($callNext, ...$args)
                     return $around($next, ...$args);
                 };
             },
             $core
         );
+
         return $wrapped(...$args);
     }
 
-    // === Internals ===
+    // ---- Registration interface ----
+
+    public function offsetSet($offset, $value): void
+    {
+        // Support: $fn[[type,...], ':primary'] = fn...
+        if (is_array($offset) && count($offset) >= 1 && is_string($offset[count($offset)-1]) && str_starts_with($offset[count($offset)-1], ':')) {
+            $tag = array_pop($offset);
+        } else {
+            $tag = ':primary';
+        }
+        $key = $this->keyFromTypes($offset);
+        if (!isset($this->methods[$key])) $this->methods[$key] = [];
+        $this->methods[$key][$tag] = $value;
+    }
+
+    public function offsetExists($offset): bool
+    {
+        $key = $this->keyFromTypes($offset);
+        return isset($this->methods[$key]);
+    }
+
+    public function offsetGet($offset): callable
+    {
+        $key = $this->keyFromTypes($offset);
+        return $this->methods[$key][':primary'] ?? throw new Exception("No :primary method for $key");
+    }
+
+    public function offsetUnset($offset): void
+    {
+        $key = $this->keyFromTypes($offset);
+        unset($this->methods[$key]);
+    }
+
+    // ---- Type handling ----
+
+    private function getTypeName($arg): string
+    {
+        if (is_object($arg)) return ltrim(get_class($arg), '\\');
+        $type = gettype($arg);
+        return match ($type) {
+            'integer' => 'int',
+            'double'  => 'float',
+            'boolean' => 'bool',
+            'string', 'array', 'resource', 'NULL' => $type,
+            default => '*'
+        };
+    }
+
+    private function allTypesForArg($arg): array
+    {
+        if (is_object($arg)) {
+            $types = [ltrim(get_class($arg), '\\')];
+            $types = array_merge($types, class_implements($arg), class_parents($arg));
+            $types[] = '*';
+            // Remove leading "\" and duplicates
+            $types = array_map(fn($x) => ltrim($x, '\\'), $types);
+            $types = array_unique($types);
+            return $types;
+        }
+        $type = $this->getTypeName($arg);
+        return [$type, '*'];
+    }
+
+    private function keyFromTypes($types)
+    {
+        // If any argument is itself an array (for varargs), flatten
+        $flat = [];
+        foreach ($types as $t) {
+            if (is_array($t)) $flat = array_merge($flat, $t);
+            else $flat[] = $t;
+        }
+        return implode(',', $flat);
+    }
+
+    // ---- CLOS-style candidate resolution ----
 
     /**
      * Return all candidate methods for given arguments.
@@ -98,12 +130,12 @@ class Multidispatch implements ArrayAccess
      */
     private function resolve(array $args): array
     {
-        // Build all type chains for each argument   
+        // Build all type chains for each argument
         $typeChains = array_map([$this, 'allTypesForArg'], $args);
-    
+
         // Compose all possible combinations (most specific first)
         $combos = $this->cartesian($typeChains);
-    
+
         $found = false;
         $candidates = [
             'before' => [],
@@ -113,7 +145,7 @@ class Multidispatch implements ArrayAccess
         ];
         $matchedTypes = null;
 
-        // Pass 1: :before, :primary, :after (most-specific to least)
+        // Try each combo for :before, :primary, :after (most to least specific)
         foreach ($combos as $combo) {
             $key = $this->keyFromTypes($combo);
             if (isset($this->methods[$key])) {
@@ -128,14 +160,6 @@ class Multidispatch implements ArrayAccess
             }
         }
 
-        // Pass 2: :around (least-specific to most)
-        foreach (array_reverse($combos) as $combo) {
-            $key = $this->keyFromTypes($combo);
-            if (isset($this->methods[$key]) && isset($this->methods[$key][':around'])) {
-                $candidates['around'][] = $this->methods[$key][':around'];
-            }
-        }
-
         // If nothing found, try default ('*' for all args)
         if (!$found) {
             $defaultKey = $this->keyFromTypes(array_fill(0, count($args), '*'));
@@ -144,7 +168,6 @@ class Multidispatch implements ArrayAccess
                 if (isset($methods[':before'])) $candidates['before'][] = $methods[':before'];
                 if (isset($methods[':primary'])) $candidates['primary'] = $methods[':primary'];
                 if (isset($methods[':after'])) $candidates['after'][] = $methods[':after'];
-                if (isset($methods[':around'])) $candidates['around'][] = $methods[':around'];
                 $matchedTypes = array_fill(0, count($args), '*');
                 $found = true;
             }
@@ -154,98 +177,59 @@ class Multidispatch implements ArrayAccess
             throw new Exception("No method for types: " . implode(', ', array_map([$this, 'getTypeName'], $args)));
         }
 
-        // :before methods should be called least-specific to most (so reverse)
-         $candidates['before'] = array_reverse($candidates['before']);
-        // :after: keep as is (most-specific first) for now
+        // Reverse :before (least to most specific), :after (most-specific first)
+        $candidates['before'] = array_reverse($candidates['before']);
+        // $candidates['after'] is already most to least specific
+
+        // Compose all applicable :around methods for every argument's full type chain
+        $candidates['around'] = $this->collectAllAroundMethods($args);
 
         return [$candidates, $matchedTypes];
     }
 
     /**
-     * Get all types for argument: class, parents, interfaces, built-in type, '*'
+     * Collect all :around methods for all type chains of all arguments.
+     * Outermost (least specific) to innermost (most specific).
      */
-    private function allTypesForArg($arg): array
+    private function collectAllAroundMethods(array $args): array
     {
-        $types = [];
-
-        if (is_object($arg)) {
-            $class = ltrim(get_class($arg), '\\');
-            $types[] = $class;
-
-            // All parent classes
-            foreach (class_parents($arg) as $parent) {
-                $types[] = ltrim($parent, '\\');
-            }
-            // All interfaces (in order declared)
-            foreach (class_implements($arg) as $iface) {
-                $types[] = ltrim($iface, '\\');
-            }
-        } else {
-            $type = gettype($arg);
-            switch ($type) {
-                case 'integer': $types[] = 'int'; break;
-                case 'double':  $types[] = 'float'; break;
-                case 'boolean': $types[] = 'bool'; break;
-                case 'string':
-                case 'array':
-                case 'resource':
-                case 'NULL':
-                    $types[] = $type; break;
-                default: $types[] = '*'; break;
+        $collected = [];
+        $seen = [];
+        foreach ($args as $arg) {
+            foreach ($this->allTypesForArg($arg) as $type) {
+                $key = $this->keyFromTypes([$type]);
+                if (!isset($seen[$key]) && isset($this->methods[$key][':around'])) {
+                    $collected[] = $this->methods[$key][':around'];
+                    $seen[$key] = true;
+                }
             }
         }
-        $types[] = '*';
-        return $types;
+        return $collected;
     }
 
-    /**
-     * Cartesian product for type combos, most specific first.
-     */
+    // ---- Cartesian product helper ----
+
     private function cartesian($arrays)
     {
-        // Recursively build all combos (most specific first)
+        if (count($arrays) === 0) return [[]];
         $result = [[]];
-        foreach ($arrays as $property) {
+        foreach ($arrays as $property => $property_values) {
             $tmp = [];
-            foreach ($result as $resultItem) {
-                foreach ($property as $item) {
-                    $tmp[] = array_merge($resultItem, [$item]);
+            foreach ($result as $result_item) {
+                foreach ($property_values as $property_value) {
+                    $tmp[] = array_merge($result_item, [$property_value]);
                 }
             }
             $result = $tmp;
         }
         return $result;
     }
-
-    /**
-     * Turn type signature into key.
-     */
-    private function keyFromTypes($types)
-    {
-        if (is_array($types)) return implode(',', $types);
-        return $types;
-    }
-
-    /**
-     * Returns simple type name for debugging.
-     */
-    private function getTypeName($arg): string
-    {
-        if (is_object($arg)) return ltrim(get_class($arg), '\\');
-        $type = gettype($arg);
-        return match ($type) {
-            'integer' => 'int',
-            'double'  => 'float',
-            'boolean' => 'bool',
-            'string', 'array', 'resource', 'NULL' => $type,
-            default => '*'
-        };
-    }
 }
 
 /**
- * Helper for functional style.
+ * Factory function, PSR-4 autoloaded.
  */
-function multidispatch(): Multidispatch {
+function multidispatch(): Multidispatch
+{
     return new Multidispatch();
 }
