@@ -98,12 +98,12 @@ class Multidispatch implements ArrayAccess
      */
     private function resolve(array $args): array
     {
-        // Build all type chains for each argument
+        // Build all type chains for each argument   
         $typeChains = array_map([$this, 'allTypesForArg'], $args);
-
+    
         // Compose all possible combinations (most specific first)
         $combos = $this->cartesian($typeChains);
-
+    
         $found = false;
         $candidates = [
             'before' => [],
@@ -113,12 +113,11 @@ class Multidispatch implements ArrayAccess
         ];
         $matchedTypes = null;
 
-        // Try each combo for :around, :before, :primary, :after
+        // Pass 1: :before, :primary, :after (most-specific to least)
         foreach ($combos as $combo) {
             $key = $this->keyFromTypes($combo);
             if (isset($this->methods[$key])) {
                 $methods = $this->methods[$key];
-                if (isset($methods[':around'])) $candidates['around'][] = $methods[':around'];
                 if (isset($methods[':before'])) $candidates['before'][] = $methods[':before'];
                 if (isset($methods[':primary']) && !$candidates['primary']) $candidates['primary'] = $methods[':primary'];
                 if (isset($methods[':after'])) $candidates['after'][] = $methods[':after'];
@@ -129,15 +128,23 @@ class Multidispatch implements ArrayAccess
             }
         }
 
+        // Pass 2: :around (least-specific to most)
+        foreach (array_reverse($combos) as $combo) {
+            $key = $this->keyFromTypes($combo);
+            if (isset($this->methods[$key]) && isset($this->methods[$key][':around'])) {
+                $candidates['around'][] = $this->methods[$key][':around'];
+            }
+        }
+
         // If nothing found, try default ('*' for all args)
         if (!$found) {
             $defaultKey = $this->keyFromTypes(array_fill(0, count($args), '*'));
             if (isset($this->methods[$defaultKey])) {
                 $methods = $this->methods[$defaultKey];
-                if (isset($methods[':around'])) $candidates['around'][] = $methods[':around'];
                 if (isset($methods[':before'])) $candidates['before'][] = $methods[':before'];
                 if (isset($methods[':primary'])) $candidates['primary'] = $methods[':primary'];
                 if (isset($methods[':after'])) $candidates['after'][] = $methods[':after'];
+                if (isset($methods[':around'])) $candidates['around'][] = $methods[':around'];
                 $matchedTypes = array_fill(0, count($args), '*');
                 $found = true;
             }
@@ -147,12 +154,9 @@ class Multidispatch implements ArrayAccess
             throw new Exception("No method for types: " . implode(', ', array_map([$this, 'getTypeName'], $args)));
         }
 
-        // Reverse :before (least to most specific), :after (most to least specific)
-        $candidates['before'] = array_reverse($candidates['before']);
-        // :after run most-specific first, as per CLOS
-        // $candidates['after'] = array_reverse($candidates['after']);
-        // Actually, most-specific :after runs first, then less specific
-        // (already in that order)
+        // :before methods should be called least-specific to most (so reverse)
+         $candidates['before'] = array_reverse($candidates['before']);
+        // :after: keep as is (most-specific first) for now
 
         return [$candidates, $matchedTypes];
     }
