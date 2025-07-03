@@ -68,7 +68,8 @@ class Multidispatch implements ArrayAccess
             if (!isset($this->methods[$key][$tag])) {
                 $this->methods[$key][$tag] = [];
             }
-            $this->methods[$key][$tag][] = $value; // Append the new method
+            // Prepend to make the latest definition the most specific (innermost)
+            array_unshift($this->methods[$key][$tag][], $value); // Append the new method
         }
     }
 
