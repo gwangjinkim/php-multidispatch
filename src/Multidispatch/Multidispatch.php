@@ -76,19 +76,17 @@ class Multidispatch implements ArrayAccess
             return $result;
         };
 
-        // Compose :around stack, from most to least specific (innermost is primary/after/before chain)
+        // Compose :around stack, from least to most specific (outermost to innermost)
         $aroundStack = $candidates['around'];
         $wrapped = array_reduce(
-            array_reverse($aroundStack),
+            $aroundStack, // <-- NO array_reverse!
             function ($next, $around) {
                 return function (...$args) use ($around, $next) {
-                    // Call $around($callNext, ...$args)
                     return $around($next, ...$args);
                 };
             },
             $core
         );
-
         return $wrapped(...$args);
     }
 
