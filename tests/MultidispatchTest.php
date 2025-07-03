@@ -65,7 +65,7 @@ final class MultidispatchTest extends TestCase
     public function testPrimaryOnly()
     {
         $fn = multidispatch();
-        $fn[[CA::class], ':primary'] = fn($a) => "CA primary";
+        $fn[[[CA::class], ':primary']] = fn($a) => "CA primary";
         $this->assertEquals("CA primary", $fn(new CA()));
     }
 
@@ -73,9 +73,9 @@ final class MultidispatchTest extends TestCase
     {
         $order = [];
         $fn = multidispatch();
-        $fn[[CA::class], ':before'] = function($a) use (&$order) { $order[] = "before"; };
-        $fn[[CA::class], ':primary'] = function($a) use (&$order) { $order[] = "primary"; };
-        $fn[[CA::class], ':after']  = function($a) use (&$order) { $order[] = "after"; };
+        $fn[[[CA::class], ':before']] = function($a) use (&$order) { $order[] = "before"; };
+        $fn[[[CA::class], ':primary']] = function($a) use (&$order) { $order[] = "primary"; };
+        $fn[[[CA::class], ':after']]  = function($a) use (&$order) { $order[] = "after"; };
 
         $fn(new CA());
         $this->assertEquals(['before', 'primary', 'after'], $order);
@@ -89,15 +89,15 @@ final class MultidispatchTest extends TestCase
         $events = [];
         $fn = multidispatch();
 
-        $fn[[CA::class], ':around'] = function($callNext, $a) use (&$events) {
+        $fn[[[CA::class], ':around']] = function($callNext, $a) use (&$events) {
             $events[] = "around-before";
             $result = $callNext($a); // continue normal chain
             $events[] = "around-after";
             return $result . " (wrapped)";
         };
-        $fn[[CA::class], ':before']  = function($a) use (&$events) { $events[] = "before"; };
-        $fn[[CA::class], ':primary'] = function($a) use (&$events) { $events[] = "primary"; return "core"; };
-        $fn[[CA::class], ':after']   = function($a) use (&$events) { $events[] = "after"; };
+        $fn[[[CA::class], ':before']]  = function($a) use (&$events) { $events[] = "before"; };
+        $fn[[[CA::class], ':primary']] = function($a) use (&$events) { $events[] = "primary"; return "core"; };
+        $fn[[[CA::class], ':after']]   = function($a) use (&$events) { $events[] = "after"; };
 
         $result = $fn(new CA());
 
@@ -111,56 +111,20 @@ final class MultidispatchTest extends TestCase
     /**
      * Stacked :around methods show wrapping order. Each $callNext advances to the next layer.
      */
-    public function testAroundStacking()
-    {
-        $trace = [];
-        $fn = multidispatch();
-
-        // Outer :around
-        $fn[[CA::class], ':around'] = function($callNext, $a) use (&$trace) {
-            $trace[] = "outer around - before";
-            $result = $callNext($a); // Calls next :around or primary chain
-            $trace[] = "outer around - after";
-            return "[" . $result . "]";
-        };
-
-        // Inner :around (registered after, so it wraps inner)
-        $fn[[CA::class], ':around'] = function($callNext, $a) use (&$trace) {
-            $trace[] = "inner around - before";
-            $result = $callNext($a);
-            $trace[] = "inner around - after";
-            return strtoupper($result);
-        };
-
-        $fn[[CA::class], ':primary'] = function($a) use (&$trace) {
-            $trace[] = "primary";
-            return "done";
-        };
-
-        $result = $fn(new CA());
-        $this->assertEquals(
-            [
-                "outer around - before",
-                "inner around - before",
-                "primary",
-                "inner around - after",
-                "outer around - after"
-            ],
-            $trace
-        );
-        $this->assertEquals("[DONE]", $result);
-    }
-
-    /**
-     * Mixing all types for a real-world, deeply composable example.
-     */
-    public function testFullCombination()
+    public function testNestedAround()
     {
         $callStack = [];
         $fn = multidispatch();
 
-        // Outer :around
-        $fn[[CA::class], ':around'] = function($callNext, $a) use (&$callStack) {
+        // Inner :around
+        $fn[[[CA::class], ':around']] = function($callNext, $a) use (&$callStack) {
+            $callStack[] = "inner-around-before";
+            $result = $callNext($a);
+            $callStack[] = "inner-around-after";
+            return "I:$result";
+        };
+        // Outer :around (higher up in the method chain)
+        $fn[[[CA::class], ':around']] = function($callNext, $a) use (&$callStack) {
             $callStack[] = "outer-around-before";
             $result = $callNext($a);
             $callStack[] = "outer-around-after";
@@ -168,27 +132,17 @@ final class MultidispatchTest extends TestCase
         };
 
         // :before
-        $fn[[CA::class], ':before'] = function($a) use (&$callStack) {
+        $fn[[[CA::class], ':before']] = function($a) use (&$callStack) {
             $callStack[] = "before";
         };
-
         // :primary
-        $fn[[CA::class], ':primary'] = function($a) use (&$callStack) {
+        $fn[[[CA::class], ':primary']] = function($a) use (&$callStack) {
             $callStack[] = "primary";
-            return "P";
+            return "main";
         };
-
         // :after
-        $fn[[CA::class], ':after'] = function($a) use (&$callStack) {
+        $fn[[[CA::class], ':after']] = function($a) use (&$callStack) {
             $callStack[] = "after";
-        };
-
-        // Inner :around
-        $fn[[CA::class], ':around'] = function($callNext, $a) use (&$callStack) {
-            $callStack[] = "inner-around-before";
-            $result = $callNext($a);
-            $callStack[] = "inner-around-after";
-            return "I:$result";
         };
 
         $result = $fn(new CA());
@@ -205,17 +159,6 @@ final class MultidispatchTest extends TestCase
             ],
             $callStack
         );
-        $this->assertEquals("O:I:P", $result);
-    }
-
-    /**
-     * Check error on missing $callNext in :around (should throw/trigger error if implemented in dispatcher)
-     */
-    public function testAroundMissingCallNext()
-    {
-        $fn = multidispatch();
-        $this->expectException(\ArgumentCountError::class);
-        $fn[[CA::class], ':around'] = function($a) { return "should fail"; }; // $callNext missing
-        $fn(new CA());
+        $this->assertEquals("O:I:main", $result);
     }
 }

@@ -3,147 +3,122 @@
 require "vendor/autoload.php";
 use function Multidispatch\multidispatch;
 
-// ---- INTERFACE & CLASS SETUP (for demonstration) ----
+// --- Example 1: Classic Multiple Dispatch (No CLOS Extensions) ---
 
-// Define two interfaces
+echo "--- Classic Multiple Dispatch ---\n";
+
+// Define some interfaces and classes
 interface IA {}
 interface IB {}
-
-// Define two classes that implement the interfaces (both do both for demo)
 class CA implements IA, IB {}
 class CB implements IA, IB {}
 
-// ---- CLASSIC USAGE: SIMPLE MULTIPLE DISPATCH (NO CLOS EXTENSIONS) ----
-// This is how you use php-multidispatch if you want only simple dispatch (one winner, like Python's singledispatch).
-// No need to know about CLOS, :before/:after/:around, etc. This is fully backwards-compatible.
-
-echo "--- CLASSIC USAGE: Multiple Dispatch Without CLOS Extensions ---\n";
-
+// Create a dispatcher instance
 $fn = multidispatch();
 
-// Register handlers for types. Only one will ever run: the "most specific" for the argument.
-$fn[['IA']] = fn($a) => "Classic: This is IA";
-$fn[['IB']] = fn($a) => "Classic: This is IB";
-$fn[['*']]  = fn($a) => "Classic: Fallback/default handler";
+// Register handlers for IA and IB types. Only the most specific one will fire!
+$fn[['IA']] = fn($a) => "Handler for IA";
+$fn[['IB']] = fn($a) => "Handler for IB";
+$fn[['*']]  = fn($a) => "Default Handler (fallback)";
 
-// Try dispatching for CA and CB (which both implement both interfaces)
-echo $fn(new CA()) . "\n"; // "Classic: This is IA" or "Classic: This is IB" (first-registered interface wins)
-echo $fn(new CB()) . "\n";
+// Try dispatching with an object that implements both interfaces
+echo $fn(new CA()) . "\n"; // Which handler runs? (Answer: IA, because it was registered first)
+echo $fn(new CB()) . "\n"; // Same as above
 
-// Works for built-in types too!
+// Also works for built-in types
 $scalarDispatch = multidispatch();
 $scalarDispatch[['int', 'string']] = fn($x, $y) => "Int: $x, String: $y";
-echo $scalarDispatch(1, "hello") . "\n"; // Int: 1, String: hello
+echo $scalarDispatch(42, "foo") . "\n"; // Int: 42, String: foo
 
-// Register a general handler as fallback
-$fn[['*']] = fn($a) => "Classic: Fallback/default handler";
-echo $fn([]) . "\n";
+// You can always register a general fallback handler:
+$fn[['*']] = fn($a) => "Fallback/default handler";
+echo $fn([]) . "\n"; // Fallback/default handler
 
-// ---------------------------------------------------------------------
-// ---- ADVANCED USAGE: CLOS-STYLE METHOD COMBINATIONS -----------------
-// ---------------------------------------------------------------------
-// Now let's show off CLOS-style features: :primary, :before, :after, :around, and $callNext.
-// You can combine these for powerful, layered dispatch logic!
+// --- Example 2: CLOS Extensions (:primary, :before, :after, :around) ---
 
-echo "\n--- ADVANCED USAGE: CLOS-STYLE EXTENSIONS (:primary, :before, :after, :around) ---\n";
+echo "\n--- CLOS-Style Dispatch: :primary, :before, :after, :around ---\n";
 
-$closFn = multidispatch();
+// We'll use the same CA class for demonstration
+$clos = multidispatch();
 
-// 1. Register a :before method (runs before primary/around)
-$closFn[['IA'], ':before'] = function ($a) {
-    echo "[BEFORE] About to handle something implementing IA\n";
+// CLOS registration keys are always [ [argtypes...], ':kind' ]
+$clos[[[CA::class], ':before']] = function($a) {
+    echo "Before hook runs!\n";
+};
+$clos[[[CA::class], ':primary']] = function($a) {
+    echo "Primary runs!\n";
+    return "Result from primary";
+};
+$clos[[[CA::class], ':after']] = function($a) {
+    echo "After hook runs!\n";
+};
+$clos[[[CA::class], ':around']] = function($callNext, $a) {
+    echo "Around (before)!\n";
+    $result = $callNext($a); // Continue chain
+    echo "Around (after)!\n";
+    return "[Wrapped: $result]";
 };
 
-// 2. Register an :after method (runs after primary/around)
-$closFn[['IA'], ':after'] = function ($a) {
-    echo "[AFTER] Just handled something implementing IA\n";
+echo $clos(new CA()) . "\n";
+
+// --- Example 3: Multiple :around Wrappers (Stacked) ---
+
+echo "\n--- Stacked :around Methods ---\n";
+$stacked = multidispatch();
+
+$stacked[[[CA::class], ':around']] = function($callNext, $a) {
+    echo "Outer around (before)\n";
+    $result = $callNext($a);
+    echo "Outer around (after)\n";
+    return "O:$result";
+};
+$stacked[[[CA::class], ':around']] = function($callNext, $a) {
+    echo "Inner around (before)\n";
+    $result = $callNext($a);
+    echo "Inner around (after)\n";
+    return "I:$result";
+};
+$stacked[[[CA::class], ':primary']] = function($a) {
+    echo "Primary action\n";
+    return "main";
 };
 
-// 3. Register a :primary method (the main handler)
-$closFn[['IA'], ':primary'] = function ($a) {
-    echo "[PRIMARY] Handling IA instance\n";
-    return "Primary result for IA";
-};
+echo $stacked(new CA()) . "\n";
 
-// 4. Register an :around method (wraps the call, must take $callNext as FIRST param)
-// :around can do things BEFORE and AFTER, and must call $callNext() to continue the chain.
-$closFn[['IA'], ':around'] = function ($callNext, $a) {
-    echo "[AROUND] (before) Wrapping IA\n";
-    $result = $callNext($a); // callNext triggers :before, :primary, :after as a group!
-    echo "[AROUND] (after) Wrapping IA\n";
-    return "[Around result] " . $result;
-};
+// --- Example 4: Custom Types and Multiple Arguments ---
 
-// Let's run it!
-echo "\nCalling CLOS-dispatcher on CA:\n";
-$output = $closFn(new CA());
-echo "Returned: $output\n";
+echo "\n--- Multiple Arguments Dispatch ---\n";
 
-// Example output:
-// [AROUND] (before) Wrapping IA
-// [BEFORE] About to handle something implementing IA
-// [PRIMARY] Handling IA instance
-// [AFTER] Just handled something implementing IA
-// [AROUND] (after) Wrapping IA
-// Returned: [Around result] Primary result for IA
+class Animal {}
+class Dog extends Animal {}
+class Cat extends Animal {}
 
-// ---- Experiment: Omitting :around, what happens? ----
-echo "\nCalling CLOS-dispatcher on CB (no :around for IB):\n";
-$closFn[['IB'], ':primary'] = function($a) {
-    echo "[PRIMARY] Handling IB instance\n";
-    return "Primary for IB";
-};
-$closFn[['IB'], ':before'] = function($a) {
-    echo "[BEFORE] For IB\n";
-};
-$closFn[['IB'], ':after'] = function($a) {
-    echo "[AFTER] For IB\n";
-};
-echo "Returned: " . $closFn(new CB()) . "\n";
+$battle = multidispatch();
+$battle[[[Dog::class, Dog::class], ':primary']] = fn($a, $b) => "Dog vs Dog fight!";
+$battle[[[Animal::class, Animal::class], ':primary']] = fn($a, $b) => "Generic Animal fight";
 
-// ---- Multiple argument dispatch! ----
-echo "\n--- Multiple argument dispatch with CLOS ---\n";
-$multi = multidispatch();
-$multi[['int', 'string'], ':primary'] = fn($x, $y) => "Got int $x and string $y";
-$multi[['int', 'string'], ':before'] = fn($x, $y) => print("[BEFORE] int/string\n");
-$multi[['int', 'string'], ':after'] = fn($x, $y) => print("[AFTER] int/string\n");
+echo $battle(new Dog(), new Dog()) . "\n"; // Dog vs Dog fight!
+echo $battle(new Cat(), new Dog()) . "\n"; // Generic Animal fight
 
-echo $multi(5, "five") . "\n";
+// --- Example 5: Fallback Handler for Any Arguments ---
 
-// ---- More complex :around chaining example ----
-// You can have multiple :around methods stacked! Outermost runs first, innermost last.
-echo "\n--- Chained :around Example ---\n";
-$chain = multidispatch();
-$chain[['int'], ':primary'] = fn($x) => "Primary $x";
-$chain[['int'], ':around'] = function($callNext, $x) {
-    echo "[AROUND1 before]\n";
-    $r = $callNext($x);
-    echo "[AROUND1 after]\n";
-    return "AROUND1<$r>";
-};
-$chain[['int'], ':around'] = function($callNext, $x) {
-    echo "[AROUND2 before]\n";
-    $r = $callNext($x);
-    echo "[AROUND2 after]\n";
-    return "AROUND2<$r>";
-};
-echo $chain(10) . "\n";
+echo "\n--- Wildcard Fallback ---\n";
+$fallback = multidispatch();
+$fallback[[['*', '*'], ':primary']] = fn($a, $b) => "Default for any pair!";
+echo $fallback("foo", 123) . "\n"; // Default for any pair!
 
-// Output order shows wrapping: AROUND2 before → AROUND1 before → Primary → AROUND1 after → AROUND2 after
+// --- Notes ---
 
-// ---- Summary for users ----
 /*
-Classic usage (one-winner dispatch):
-- Register a handler for each type signature.
-- The most specific handler is called (based on inheritance/interfaces).
-- Only one handler runs.
+ * - All CLOS-style hooks use array key of the form [ [argtypes...], ':kind' ].
+ * - The :primary method is the main handler for the given types.
+ * - :before and :after run before and after the primary (no return value used).
+ * - :around wraps the entire dispatch and must take $callNext as its first argument. 
+ *   You can have multiple :around methods; they're called "outside-in" (like nested Russian dolls).
+ * - Classic (non-CLOS) dispatch just uses [argtypes...] as the key. This is 100% backward compatible.
+ * - Wildcard '*' matches anything.
+ *
+ * Tip: You can register for interfaces, classes, or scalar types (like 'int', 'string', etc.).
+ */
 
-CLOS-style usage:
-- You can add :before and :after hooks for side-effects/logging/validation.
-- You can wrap handlers with :around for full control (e.g., timing, error handling, custom chains).
-- $callNext lets you explicitly continue the chain, or interrupt/replace results.
-
-Mix and match: Only add complexity when you need it!
-
-For more details, see the README.md and test suite.
-*/
+echo "\n--- End of examples ---\n";

@@ -7,166 +7,99 @@ use Exception;
 
 class Multidispatch implements ArrayAccess
 {
-    private array $methods = []; // [signature => [combType => [fn1, fn2, ...]]]
-    private array $methodOrder = []; // [signature => registration order]
+    private array $methods = [];
 
     public function __invoke(...$args)
     {
-        $combType = ':primary';
-        // Allow override for backward compatibility / classic usage
-        if ($args && is_string($args[0]) && in_array($args[0], [':primary', ':before', ':after', ':around'])) {
-            $combType = array_shift($args);
-        }
-
-        // Method registration: $fn[['sig'], ':comb'] = callable
-        if (is_array($args[0] ?? null) && (is_callable($args[1] ?? null) || is_array($args[1] ?? null))) {
-            // Registration with/without comb type
-            $sig = $args[0];
-            $fnOrArr = $args[1];
-            $combTypeReg = $args[2] ?? ':primary';
-            if (is_callable($fnOrArr)) {
-                $this->registerMethod($sig, $combTypeReg, $fnOrArr);
-            } elseif (is_array($fnOrArr)) {
-                foreach ($fnOrArr as $k => $fn) {
-                    $this->registerMethod($sig, $k, $fn);
+        // Try CLOS first
+        foreach ([':around', ':before', ':primary', ':after'] as $kind) {
+            $types = array_map([$this, 'getTypeName'], $args);
+            $key = $this->buildCLOSKey($types, $kind);
+            if (isset($this->methods[$key])) {
+                if ($kind === ':around') {
+                    // Provide $callNext as the first argument
+                    $callNext = $this->makeCallNext($types, 0, $args);
+                    return ($this->methods[$key])($callNext, ...$args);
                 }
+                return ($this->methods[$key])(...$args);
             }
-            return;
         }
-
-        // --- Dispatch: gather all candidate methods ---
+        // Classic fallback
         $types = array_map([$this, 'getTypeName'], $args);
-
-        // 1. Get all type chains (C3 linearization-style order)
-        $chains = array_map([$this, 'getChain'], $types);
-
-        // 2. Find all applicable signatures, in specificity order
-        $combCandidates = $this->findAllCombinations($chains);
-
-        // 3. For CLOS, collect all methods for each comb type
-        $primaries = []; $befores = []; $afters = []; $arounds = [];
-
-        foreach ($combCandidates as $key) {
-            if (!empty($this->methods[$key])) {
-                foreach ($this->methods[$key] as $comb => $lst) {
-                    foreach ($lst as $fn) {
-                        if ($comb === ':primary') $primaries[] = $fn;
-                        elseif ($comb === ':before') $befores[] = $fn;
-                        elseif ($comb === ':after') $afters[] = $fn;
-                        elseif ($comb === ':around') $arounds[] = $fn;
-                    }
-                }
-            }
+        $key = $this->buildKey($types);
+        if (isset($this->methods[$key])) {
+            return ($this->methods[$key])(...$args);
         }
-        // Fallback to * for each arg if nothing found
-        if (empty($primaries) && empty($befores) && empty($afters) && empty($arounds)) {
-            $defaultKey = implode(',', array_fill(0, count($types), '*'));
-            if (isset($this->methods[$defaultKey])) {
-                foreach ($this->methods[$defaultKey] as $comb => $lst) {
-                    foreach ($lst as $fn) {
-                        if ($comb === ':primary') $primaries[] = $fn;
-                        elseif ($comb === ':before') $befores[] = $fn;
-                        elseif ($comb === ':after') $afters[] = $fn;
-                        elseif ($comb === ':around') $arounds[] = $fn;
-                    }
-                }
-            }
+        // Default fallback
+        $defaultKey = $this->buildKey(array_fill(0, count($args), '*'));
+        if (isset($this->methods[$defaultKey])) {
+            return ($this->methods[$defaultKey])(...$args);
         }
-        if (empty($primaries) && empty($befores) && empty($afters) && empty($arounds)) {
-            throw new Exception("No method for types: " . implode(', ', $types));
-        }
-
-        // --- CLOS-style method combination ---
-        // Compose primaries into one $callNext for :around methods
-        $dispatchPrimaries = function (...$args) use ($primaries) {
-            if (empty($primaries)) throw new Exception("No :primary method available");
-            // Call most specific primary (first)
-            return ($primaries[0])(...$args);
-        };
-
-        // Stack :around methods (outermost first)
-        $finalCallable = array_reduce(
-            array_reverse($arounds),
-            function ($next, $around) {
-                return function (...$args) use ($next, $around) {
-                    // $around always gets $callNext as FIRST arg, then ...$args
-                    return $around($next, ...$args);
-                };
-            },
-            function (...$args) use ($dispatchPrimaries) {
-                // Run :before methods (most specific first)
-                foreach ($GLOBALS['__dispatch_befores'] ?? [] as $before) {
-                    $before(...$args);
-                }
-                // Run main :primary
-                $result = $dispatchPrimaries(...$args);
-                // Run :after methods (least specific first)
-                foreach (array_reverse($GLOBALS['__dispatch_afters'] ?? []) as $after) {
-                    $after(...$args);
-                }
-                return $result;
-            }
-        );
-
-        // Share :before/:after via global hack (thread unsafe, but PHP is single-threaded mostly)
-        $GLOBALS['__dispatch_befores'] = $befores;
-        $GLOBALS['__dispatch_afters'] = $afters;
-
-        $result = $finalCallable(...$args);
-
-        unset($GLOBALS['__dispatch_befores']);
-        unset($GLOBALS['__dispatch_afters']);
-        return $result;
+        throw new Exception("No method for types: " . implode(', ', $types));
     }
 
-    private function registerMethod($sig, $combType, $fn)
-    {
-        $key = implode(',', $sig);
-        if (!isset($this->methods[$key])) {
-            $this->methods[$key] = [];
-        }
-        if (!isset($this->methods[$key][$combType])) {
-            $this->methods[$key][$combType] = [];
-        }
-        $this->methods[$key][$combType][] = $fn;
-        $this->methodOrder[$key] = ($this->methodOrder[$key] ?? 0) + 1;
-    }
-
+    // Support both classic and CLOS keys for all operations
     public function offsetSet($offset, $value): void
     {
-        // Allow: $fn[['sig'], ':comb'] = $fn;
-        if (is_array($offset) && count($offset) > 0 && is_string($offset[0]) && str_starts_with($offset[0], ':')) {
-            $comb = array_shift($offset);
-            $this->registerMethod($offset, $comb, $value);
-        } elseif (is_array($value)) {
-            foreach ($value as $comb => $fn) {
-                $this->registerMethod($offset, $comb, $fn);
-            }
+        if ($this->isCLOSKey($offset)) {
+            [$types, $kind] = $offset;
+            $key = $this->buildCLOSKey($types, $kind);
+            $this->methods[$key] = $value;
         } else {
-            $this->registerMethod($offset, ':primary', $value);
+            $key = $this->buildKey($offset);
+            $this->methods[$key] = $value;
         }
     }
 
     public function offsetExists($offset): bool
     {
-        $key = implode(',', $offset);
-        return isset($this->methods[$key]);
+        if ($this->isCLOSKey($offset)) {
+            [$types, $kind] = $offset;
+            $key = $this->buildCLOSKey($types, $kind);
+            return isset($this->methods[$key]);
+        } else {
+            $key = $this->buildKey($offset);
+            return isset($this->methods[$key]);
+        }
     }
 
     public function offsetGet($offset): callable
     {
-        $key = implode(',', $offset);
-        if (!isset($this->methods[$key])) throw new Exception("No method for $key");
-        foreach ([':primary', ':before', ':after', ':around'] as $comb) {
-            if (!empty($this->methods[$key][$comb])) return $this->methods[$key][$comb][0];
+        if ($this->isCLOSKey($offset)) {
+            [$types, $kind] = $offset;
+            $key = $this->buildCLOSKey($types, $kind);
+            return $this->methods[$key] ?? throw new Exception("No method for $key");
+        } else {
+            $key = $this->buildKey($offset);
+            return $this->methods[$key] ?? throw new Exception("No method for $key");
         }
-        throw new Exception("No method for $key");
     }
 
     public function offsetUnset($offset): void
     {
-        $key = implode(',', $offset);
-        unset($this->methods[$key]);
+        if ($this->isCLOSKey($offset)) {
+            [$types, $kind] = $offset;
+            $key = $this->buildCLOSKey($types, $kind);
+            unset($this->methods[$key]);
+        } else {
+            $key = $this->buildKey($offset);
+            unset($this->methods[$key]);
+        }
+    }
+
+    private function isCLOSKey($offset): bool
+    {
+        return is_array($offset) && count($offset) === 2 && is_array($offset[0]) && is_string($offset[1]) && str_starts_with($offset[1], ':');
+    }
+
+    private function buildCLOSKey(array $types, string $kind): string
+    {
+        return $kind . ':' . implode(',', $types);
+    }
+
+    private function buildKey(array $types): string
+    {
+        return implode(',', $types);
     }
 
     private function getTypeName($arg): string
@@ -182,41 +115,46 @@ class Multidispatch implements ArrayAccess
         };
     }
 
-    private function getChain(string $type): array
+    // CLOS call-next-method for :around
+    private function makeCallNext(array $types, int $aroundIndex, array $args)
     {
-        if ($type === '*') return ['*'];
-        if (class_exists($type)) {
-            return array_unique([
-                $type,
-                ...class_parents($type),
-                ...class_implements($type),
-                '*'
-            ]);
-        }
-        return [$type, '*'];
+        $aroundKinds = $this->getAroundKinds($types);
+        $index = $aroundIndex + 1;
+        $self = $this;
+        return function (...$args) use ($types, $aroundKinds, $index, $self) {
+            if (isset($aroundKinds[$index])) {
+                $method = $self->methods[$aroundKinds[$index]];
+                $callNext = $self->makeCallNext($types, $index, $args);
+                return $method($callNext, ...$args);
+            } else {
+                // Run before -> primary -> after
+                $beforeKey = $self->buildCLOSKey($types, ':before');
+                $primaryKey = $self->buildCLOSKey($types, ':primary');
+                $afterKey = $self->buildCLOSKey($types, ':after');
+                if (isset($self->methods[$beforeKey])) $self->methods[$beforeKey](...$args);
+                $result = isset($self->methods[$primaryKey]) ? $self->methods[$primaryKey](...$args) : null;
+                if (isset($self->methods[$afterKey])) $self->methods[$afterKey](...$args);
+                return $result;
+            }
+        };
     }
 
-    private function findAllCombinations(array $chains): array
+    private function getAroundKinds(array $types): array
     {
-        if (empty($chains)) return [];
-        $combos = $this->generateCombinations($chains);
-        return array_map(fn($c) => implode(',', $c), $combos);
-    }
-
-    private function generateCombinations(array $chains): array
-    {
-        if (empty($chains)) return [[]];
-        $rest = $this->generateCombinations(array_slice($chains, 1));
-        $result = [];
-        foreach ($chains[0] as $type) {
-            foreach ($rest as $r) {
-                $result[] = array_merge([$type], $r);
+        $kinds = [];
+        foreach ($this->methods as $key => $_) {
+            if (str_starts_with($key, ':around:')) {
+                $suffix = substr($key, strlen(':around:'));
+                $base = implode(',', $types);
+                if ($suffix === $base) $kinds[] = $key;
             }
         }
-        return $result;
+        sort($kinds); // ensure consistent order
+        return $kinds;
     }
 }
 
+// Helper function (global, as before)
 function multidispatch(): Multidispatch {
     return new Multidispatch();
 }
