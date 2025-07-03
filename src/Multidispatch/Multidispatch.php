@@ -182,26 +182,22 @@ class Multidispatch implements ArrayAccess
         // $candidates['after'] is already most to least specific
 
         // Compose all applicable :around methods for every argument's full type chain
-        $candidates['around'] = $this->collectAllAroundMethods($args);
-
+        $candidates['around'] = $this->collectAllAroundMethodsForCombo($matchedTypes);
+        
         return [$candidates, $matchedTypes];
     }
 
     /**
-     * Collect all :around methods for all type chains of all arguments.
+     * Collect all :around methods for the matched type combination (combo).
      * Outermost (least specific) to innermost (most specific).
      */
-    private function collectAllAroundMethods(array $args): array
+    private function collectAllAroundMethodsForCombo($combo): array
     {
         $collected = [];
-        $seen = [];
-        foreach ($args as $arg) {
-            foreach ($this->allTypesForArg($arg) as $type) {
-                $key = $this->keyFromTypes([$type]);
-                if (!isset($seen[$key]) && isset($this->methods[$key][':around'])) {
-                    $collected[] = $this->methods[$key][':around'];
-                    $seen[$key] = true;
-                }
+        foreach ($combo as $type) {
+            $key = $this->keyFromTypes([$type]);
+            if (isset($this->methods[$key][':around'])) {
+                $collected[] = $this->methods[$key][':around'];
             }
         }
         return $collected;
