@@ -65,7 +65,7 @@ Or add to your `composer.json`:
 }
 ```
 
-Eventually use `"0.3.1"` e.g., to pin to a version.
+Eventually use `"^0.3.1"` e.g., to pin to a version.
 
 ### Requirements
 
