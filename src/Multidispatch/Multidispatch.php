@@ -15,15 +15,9 @@ class DispatchPolicy {
     public const LAST_WINS = 'last-wins';
 }
 
-// // For PHP 8.1+ you could use Enum:
-// enum DispatchPolicy: string {
-//     case FirstWins = 'first-wins';
-//     case LastWins = 'last-wins';
-// }
-
 class Multidispatch implements ArrayAccess
 {
-    private string $dispatchPolicy = DispatchPolicy::LAST_WINS;
+    private string $dispatchPolicy = DispatchPolicy::LAST_WINS; // better for extensibility than FIRST_WINS!
 
     public function setDispatchPolicy(string $policy): void {
         if (!in_array($policy, [DispatchPolicy::FIRST_WINS, DispatchPolicy::LAST_WINS])) {

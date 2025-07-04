@@ -31,6 +31,7 @@ Multiple dispatch lets you write functions whose behavior depends on the *runtim
 - **Inheritance & Interface Awareness:** Works with classes, interfaces, built-in types
 - **Fallbacks:** Register wildcard methods for default cases
 - **Simple API:** Intuitive, modern PHP code
+- **Configurable Dispatch Policy**: Choose “first-wins” or “last-wins” for registration order.
 
 ---
 
@@ -58,7 +59,7 @@ Or add to your `composer.json`:
 
 ```json
 "require": {
-    "gwangjinkim/php-multidispatch": "^1.0"
+    "gwangjinkim/php-multidispatch": "^3.0"
 }
 ```
 
