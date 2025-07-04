@@ -23,13 +23,13 @@ final class MultidispatchTest extends TestCase
     public function testClassDispatch()
     {
         $fn = multidispatch();
+        $fn->setDispatchPolicy(\Multidispatch\DispatchPolicy::FIRST_WINS); // Add this line!
         $fn[[Dog::class, Dog::class]] = fn($a, $b) => 'Dog vs Dog';
         $fn[[Animal::class, Animal::class]] = fn($a, $b) => 'Animal fight';
 
         $this->assertEquals('Dog vs Dog', $fn(new Dog(), new Dog()));
         $this->assertEquals('Animal fight', $fn(new Cat(), new Dog()));
     }
-
     public function testScalarDispatch()
     {
         $fn = multidispatch();
