@@ -2,6 +2,7 @@
 
 use PHPUnit\Framework\TestCase;
 use function Multidispatch\multidispatch;
+use Multidispatch\DispatchPolicy;
 
 /**
  * Basic interfaces and classes for dispatch tests.
@@ -46,7 +47,8 @@ final class MultidispatchTest extends TestCase
     }
 
     /**
-     * Classic style: one-winner, no CLOS extensions.
+     * Classic style: registration order now controls which handler is picked if multiple interfaces match.
+     * (First-wins policy by default.)
      */
     public function testInterfaceOrderSimple()
     {
@@ -54,16 +56,21 @@ final class MultidispatchTest extends TestCase
         $fn[['IA']] = fn($a) => 'X';
         $fn[['IB']] = fn($a) => 'Y';
 
-        // With both interfaces implemented, the first registered wins by default
-        $this->assertEquals('X', $fn(new CA())); // Because 'IA' registered first
-        $this->assertEquals('X', $fn(new CB())); // 'IA' registered first
+        // Default policy is last-wins! (Change with setDispatchPolicy as needed)
+        $this->assertEquals('Y', $fn(new CA())); // IB wins, registered last
+        $this->assertEquals('Y', $fn(new CB()));
+
+        // Now switch to first-wins
+        $fn->setDispatchPolicy(DispatchPolicy::FIRST_WINS);
+        $this->assertEquals('X', $fn(new CA())); // IA wins, registered first
+        $this->assertEquals('X', $fn(new CB()));
     }
 
     /**
      * CLOS-style method combination: :primary, :before, :after, :around
      */
     public function testPrimaryOnly()
-    {
+    {  
         $fn = multidispatch();
         $fn[[[CA::class], ':primary']] = fn($a) => "CA primary";
         $this->assertEquals("CA primary", $fn(new CA()));
@@ -116,14 +123,14 @@ final class MultidispatchTest extends TestCase
         $callStack = [];
         $fn = multidispatch();
 
-        // Inner :around
+        // Inner :around (registered *second*, so it's more specific)
         $fn[[[CA::class], ':around']] = function($callNext, $a) use (&$callStack) {
             $callStack[] = "inner-around-before";
             $result = $callNext($a);
             $callStack[] = "inner-around-after";
             return "I:$result";
         };
-        // Outer :around (higher up in the method chain)
+        // Outer :around (registered *first*, so it's less specific)
         $fn[[[CA::class], ':around']] = function($callNext, $a) use (&$callStack) {
             $callStack[] = "outer-around-before";
             $result = $callNext($a);
@@ -160,5 +167,33 @@ final class MultidispatchTest extends TestCase
             $callStack
         );
         $this->assertEquals("O:I:main", $result);
+    }
+
+    /**
+     * Test wildcard fallback works for any arguments.
+     */
+    public function testWildcardFallback()
+    {
+        $fn = multidispatch();
+        $fn[[['*', '*'], ':primary']] = fn($a, $b) => "Default for any pair!";
+        $this->assertEquals("Default for any pair!", $fn("foo", 123));
+        $this->assertEquals("Default for any pair!", $fn(null, []));
+    }
+
+    /**
+     * Test changing dispatch policy on the fly.
+     */
+    public function testSwitchDispatchPolicy()
+    {
+        $fn = multidispatch();
+        $fn[['IA']] = fn($a) => 'A';
+        $fn[['IB']] = fn($a) => 'B';
+
+        // Last-wins (default)
+        $this->assertEquals('B', $fn(new CA()));
+
+        // Switch to first-wins
+        $fn->setDispatchPolicy(DispatchPolicy::FIRST_WINS);
+        $this->assertEquals('A', $fn(new CA()));
     }
 }
