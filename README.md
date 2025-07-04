@@ -78,6 +78,29 @@ Or add to your `composer.json`:
     ```powershell
     scoop install php composer
     ```
+---
+
+## Dispatch Policy: first-wins vs last-wins
+
+You control which matching handler "wins" when there are multiple equally-specific possibilities (for example, two interfaces, or multiple wildcards).  
+- **First-wins:** The first registered method for a type signature is chosen (classic OOP behavior).
+- **Last-wins:** The last registered method is chosen (suits override-style patterns).
+
+**Default:** `last-wins` for maximum extensibility, but you can switch any dispatcher at any time:
+
+```php
+$fn = multidispatch();
+$fn->setDispatchPolicy(\Multidispatch\DispatchPolicy::FIRST_WINS);
+// ...or...
+$fn->setDispatchPolicy(\Multidispatch\DispatchPolicy::LAST_WINS);
+```
+
+Use `FIRST_WINS` for backwards compatibility or stricter method resolution.
+
+| Policy        | Which handler wins?      | When to use                                |
+|---------------|--------------------------|--------------------------------------------|
+| first-wins    | First registered         | Strict/classic OOP, legacy, backward-compat|
+| last-wins     | Last registered (default)| Override style, plugin/extensible systems  |
 
 ---
 
@@ -129,7 +152,26 @@ echo $fn([]); // Fallback/default handler
 - You’re porting code from a previous version of this package.
 - You don’t need CLOS-style hooks or method chaining (yet).
 
+> **Note:**
+> You can always choose whether registration order is first-wins or last-wins, per-dispatcher, using `setDispatchPolicy`.
+> The default is `last-wins`, but all older code is fully supported
+
 ---
+
+## Why CLOS? (And What Makes It Different?)
+
+Why all this talk about CLOS (the Common Lisp Object System)?  
+CLOS is the most advanced, flexible object system ever built—letting you combine, stack, override, and wrap behavior with surgical precision.  
+With these extensions, you can:
+
+- **Dynamically stack hooks** before/after/around any method, for any type (logging, validation, timing, security, profiling, tracing, etc).
+- **Control composition:** Choose which method(s) run and how their results are combined—no more black-box dispatch!
+- **Open-Closed Principle, but supercharged:** Extend *any* package, for *any* type, without touching its code.
+- **Stay DRY:** Cross-cutting concerns (security, logging, caching) are isolated, not tangled up in your logic.
+
+It’s a friendlier, more composable way to program.  
+And it’s 100% optional—you can stick with classic style if you like!
+
 
 ## CLOS-Style Method Combination
 
@@ -254,6 +296,62 @@ Audience cheers
 
 ---
 
+### Detailed CLOS Example With Explanations
+
+```php
+require "vendor/autoload.php";
+use function Multidispatch\multidispatch;
+
+// Define interfaces and classes
+interface IA {}
+class CA implements IA {}
+
+// Make a dispatcher
+$fn = multidispatch();
+
+// :before hook (runs before primary)
+$fn[[[CA::class], ':before']] = function($a) {
+    echo "Logging before CA\n";
+};
+// :primary (main logic)
+$fn[[[CA::class], ':primary']] = function($a) {
+    echo "Handling CA\n";
+    return "RESULT";
+};
+// :after hook (runs after primary)
+$fn[[[CA::class], ':after']] = function($a) {
+    echo "Cleanup after CA\n";
+};
+// :around wrapper (can see and control the whole call chain)
+$fn[[[CA::class], ':around']] = function($callNext, $a) {
+    echo "Start outer transaction\n";
+    $result = $callNext($a); // This calls before/primary/after
+    echo "End outer transaction\n";
+    return "[[[$result]]]";
+};
+
+echo $fn(new CA()); // Try it out!
+```
+
+Output:
+```php
+Logging before CA
+Start outer transaction
+Handling CA
+Cleanup after CA
+End outer transaction
+[[[RESULT]]]
+```
+What’s happening?
+- All hooks (:before, :after, :around) are run in the right order.
+- $callNext in :around lets you run or skip the rest.
+- You can combine as many hooks and layers as you want!
+
+---
+> **Pro tip:** Want several :around? Just register more! They stack “outside-in” (the last registered is the innermost).
+
+---
+
 ## Testing
 
 Run your tests with PHPUnit:
@@ -289,11 +387,14 @@ If you get stuck, check out [the examples](examples/example.php) or open an issu
 
 ## Call to Action
 
-**Ready to transform your PHP codebase?**
+**Ready to write cleaner, more extensible PHP—no more “if-else soup”?  
+Try it out!**
 
 - ⭐ Star the [GitHub project](https://github.com/gwangjinkim/php-multidispatch)
 - 🚀 Try it out in your next side project
-- 🐞 File issues or share feedback for improvements
+- 🐞 File issues or request features or share feedback for improvements or contribute extensions
 
-Welcome to a more elegant, powerful PHP. Enjoy dispatching!
+Whether you want classic dispatch, CLOS power features, or both, you’re covered.  
+Enjoy dispatching!
+
 
