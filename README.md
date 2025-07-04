@@ -52,16 +52,20 @@ Multiple dispatch lets you write functions whose behavior depends on the *runtim
 ### With Composer
 
 ```bash
-composer require gwangjinkim/php-multidispatch
+composer require gwangjinkim/php-multidispatch:dev-main
 ```
+
+Use `:dev-main` to get the newest version! Specify version numbers when you want to downgrade or pin a version.
 
 Or add to your `composer.json`:
 
 ```json
 "require": {
-    "gwangjinkim/php-multidispatch": "^3.0"
+    "gwangjinkim/php-multidispatch": "dev-main"
 }
 ```
+
+Eventually use `"0.3.1"` e.g., to pin to a version.
 
 ### Requirements
 
