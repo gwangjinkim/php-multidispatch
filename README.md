@@ -155,7 +155,14 @@ echo $fn([]); // Fallback/default handler
 
 > **Note:**
 > You can always choose whether registration order is first-wins or last-wins, per-dispatcher, using `setDispatchPolicy`.
-> The default is `last-wins`, but all older code is fully supported
+> The default is `last-wins`, but all older code is fully supported.
+
+```php
+$fn = multidispatch();
+$fn->setDispatchPolicy(\Multidispatch\DispatchPolicy::FIRST_WINS);
+// ...or...
+$fn->setDispatchPolicy(\Multidispatch\DispatchPolicy::LAST_WINS);
+```
 
 ---
 
