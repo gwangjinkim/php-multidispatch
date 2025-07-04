@@ -71,7 +71,7 @@ class Multidispatch implements ArrayAccess
                 $this->methods[$key][$tag] = [];
             }
             // Prepend to make the latest definition the most specific (innermost)
-            array_unshift($this->methods[$key][$tag][], $value); // Append the new method
+            array_unshift($this->methods[$key][$tag], $value); // Append the new method
         }
     }
 
