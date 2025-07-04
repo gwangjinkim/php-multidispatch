@@ -59,8 +59,10 @@ class Multidispatch implements ArrayAccess
             $tag = ':primary';
         }
         $key = $this->keyFromTypes($offset);
-        if (!isset($this->methods[$key])) $this->methods[$key] = [];
-    
+        if (!isset($this->methods[$key]) || !is_array($this->methods[$key])) {
+            $this->methods[$key] = [];
+        }
+
         if ($tag === ':primary') {
             $this->methods[$key][$tag] = $value;
         } else {
@@ -190,6 +192,7 @@ class Multidispatch implements ArrayAccess
             $candidates['before'] = array_reverse($candidates['before']);
 
             // :around methods also run least-to-most specific (outermost to innermost).
+            $candidates['around'] = array_reverse($candidates['around']);
             
             // :after methods run most-to-least specific (correct order as collected).
 
