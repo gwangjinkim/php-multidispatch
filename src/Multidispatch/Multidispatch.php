@@ -7,12 +7,32 @@ use Exception;
 
 /**
  * Multiple Dispatch system with CLOS-style method combinations.
- *
  * Supports :primary, :before, :after, :around, with proper stacking of :around methods
  * (from least to most specific, outermost to innermost).
  */
+class DispatchPolicy {
+    public const FIRST_WINS = 'first-wins';
+    public const LAST_WINS = 'last-wins';
+}
+
+// // For PHP 8.1+ you could use Enum:
+// enum DispatchPolicy: string {
+//     case FirstWins = 'first-wins';
+//     case LastWins = 'last-wins';
+// }
+
 class Multidispatch implements ArrayAccess
 {
+    private string $dispatchPolicy = DispatchPolicy::LAST_WINS;
+
+    public function setDispatchPolicy(string $policy): void {
+        if (!in_array($policy, [DispatchPolicy::FIRST_WINS, DispatchPolicy::LAST_WINS])) {
+            throw new Exception("Policy must be 'first-wins' or 'last-wins'");
+        }
+        $this->dispatchPolicy = $policy;
+    }
+    // Usage: $fn->setDispatchPolicy(DispatchPolicy::FIRST_WINS);
+
     private array $methods = [];
 
     public function __invoke(...$args)
@@ -64,6 +84,7 @@ class Multidispatch implements ArrayAccess
         }
 
         if ($tag === ':primary') {
+            // For classic dispatch, simply overwrite (last-wins by default)
             $this->methods[$key][$tag] = $value;
         } else {
             // For other tags, collect methods in an array.
@@ -71,7 +92,7 @@ class Multidispatch implements ArrayAccess
                 $this->methods[$key][$tag] = [];
             }
             // Prepend to make the latest definition the most specific (innermost)
-            array_unshift($this->methods[$key][$tag], $value); // Append the new method
+            array_unshift($this->methods[$key][$tag], $value);
         }
     }
 
@@ -114,7 +135,6 @@ class Multidispatch implements ArrayAccess
             $types = [ltrim(get_class($arg), '\\')];
             $types = array_merge($types, class_implements($arg), class_parents($arg));
             $types[] = '*';
-            // Remove leading "\" and duplicates
             $types = array_map(fn($x) => ltrim($x, '\\'), $types);
             $types = array_unique($types);
             return $types;
@@ -125,7 +145,6 @@ class Multidispatch implements ArrayAccess
 
     private function keyFromTypes($types)
     {
-        // If any argument is itself an array (for varargs), flatten
         $flat = [];
         foreach ($types as $t) {
             if (is_array($t)) $flat = array_merge($flat, $t);
@@ -140,13 +159,10 @@ class Multidispatch implements ArrayAccess
      * Return all candidate methods for given arguments.
      * @return [candidates, resolvedTypes]
      */
-
     private function resolve(array $args): array
     {
-        // Build all type chains for each argument
         $typeChains = array_map([$this, 'allTypesForArg'], $args);
 
-        // Compose all possible combinations (most specific first)
         $combos = $this->cartesian($typeChains);
 
         $candidates = [
@@ -155,48 +171,47 @@ class Multidispatch implements ArrayAccess
             'after' => [],
             'around' => [],
         ];
-            $matchedTypes = null;
+        $matchedTypes = null;
 
-            // Try each combo for all qualifiers (from most to least specific)
-            foreach ($combos as $combo) {
-                $key = $this->keyFromTypes($combo);
-                if (isset($this->methods[$key])) {
-                    $methods = $this->methods[$key];
-
-                    if (isset($methods[':before'])) {
-                        $candidates['before'] = array_merge($candidates['before'], $methods[':before']);
-                    }
-                    if (isset($methods[':primary']) && !$candidates['primary']) {
+        // For primary, choose based on dispatch policy!
+        foreach ($combos as $combo) {
+            $key = $this->keyFromTypes($combo);
+            if (isset($this->methods[$key])) {
+                $methods = $this->methods[$key];
+                if (isset($methods[':before'])) {
+                    $candidates['before'] = array_merge($candidates['before'], $methods[':before']);
+                }
+                if (isset($methods[':primary'])) {
+                    if ($this->dispatchPolicy === DispatchPolicy::FIRST_WINS && !$candidates['primary']) {
                         $candidates['primary'] = $methods[':primary'];
                         $matchedTypes = $combo;
                     }
-                    if (isset($methods[':after'])) {
-                        $candidates['after'] = array_merge($candidates['after'], $methods[':after']);
-                    }
-                    if (isset($methods[':around'])) {
-                        $candidates['around'] = array_merge($candidates['around'], $methods[':around']);
+                    if ($this->dispatchPolicy === DispatchPolicy::LAST_WINS) {
+                        $candidates['primary'] = $methods[':primary'];
+                        $matchedTypes = $combo;
                     }
                 }
+                if (isset($methods[':after'])) {
+                    $candidates['after'] = array_merge($candidates['after'], $methods[':after']);
+                }
+                if (isset($methods[':around'])) {
+                    $candidates['around'] = array_merge($candidates['around'], $methods[':around']);
+                }
             }
+        }
 
-            // This logic now correctly finds a primary method or throws.
-            // The original's default '*' handling is implicitly covered if '*' is in $combos.
-            if (!$candidates['primary']) {
-                throw new Exception("No :primary method for types: " . implode(', ', array_map([$this, 'getTypeName'], $args)));
-            }
+        // The original's default '*' handling is implicitly covered if '*' is in $combos.
+        if (!$candidates['primary']) {
+            throw new Exception("No :primary method for types: " . implode(', ', array_map([$this, 'getTypeName'], $args)));
+        }
 
-            // Sort methods according to CLOS rules. 
-            // We collected from most-to-least specific.
-            
-            // :before methods run least-to-most specific, so we reverse the collected list.
-            $candidates['before'] = array_reverse($candidates['before']);
+        // :before methods run least-to-most specific, so we reverse the collected list.
+        $candidates['before'] = array_reverse($candidates['before']);
+        // :after methods run most-to-least specific (as collected).
+        // :around methods: least-to-most specific
+        $candidates['around'] = array_reverse($candidates['around']);
 
-            // :around methods also run least-to-most specific (outermost to innermost).
-            $candidates['around'] = array_reverse($candidates['around']);
-            
-            // :after methods run most-to-least specific (correct order as collected).
-
-            return [$candidates, $matchedTypes];
+        return [$candidates, $matchedTypes];
     }
 
     // ---- Cartesian product helper ----
