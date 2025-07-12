@@ -1,6 +1,8 @@
 <?php
 
-namespace Multidispatch;
+declare(strict_types=1);
+
+namespace GwangJinKim\Multidispatch;
 
 use ArrayAccess;
 use Exception;
@@ -10,22 +12,15 @@ use Exception;
  * Supports :primary, :before, :after, :around, with proper stacking of :around methods
  * (from least to most specific, outermost to innermost).
  */
-class DispatchPolicy {
-    public const FIRST_WINS = 'first-wins';
-    public const LAST_WINS = 'last-wins';
-}
 
 class Multidispatch implements ArrayAccess
 {
-    private string $dispatchPolicy = DispatchPolicy::LAST_WINS; // better for extensibility than FIRST_WINS!
+    private DispatchPolicy $dispatchPolicy = DispatchPolicy::LastWins; // better for extensibility than FirstWins!
 
-    public function setDispatchPolicy(string $policy): void {
-        if (!in_array($policy, [DispatchPolicy::FIRST_WINS, DispatchPolicy::LAST_WINS])) {
-            throw new Exception("Policy must be 'first-wins' or 'last-wins'");
-        }
+    public function setDispatchPolicy(DispatchPolicy $policy): void {
         $this->dispatchPolicy = $policy;
     }
-    // Usage: $fn->setDispatchPolicy(DispatchPolicy::FIRST_WINS);
+    // Usage: $fn->setDispatchPolicy(DispatchPolicy::FirstWins);
 
     private array $methods = [];
 
@@ -176,11 +171,11 @@ class Multidispatch implements ArrayAccess
                     $candidates['before'] = array_merge($candidates['before'], $methods[':before']);
                 }
                 if (isset($methods[':primary'])) {
-                    if ($this->dispatchPolicy === DispatchPolicy::FIRST_WINS && !$candidates['primary']) {
+                    if ($this->dispatchPolicy === DispatchPolicy::FirstWins && !$candidates['primary']) {
                         $candidates['primary'] = $methods[':primary'];
                         $matchedTypes = $combo;
                     }
-                    if ($this->dispatchPolicy === DispatchPolicy::LAST_WINS) {
+                    if ($this->dispatchPolicy === DispatchPolicy::LastWins) {
                         $candidates['primary'] = $methods[':primary'];
                         $matchedTypes = $combo;
                     }
@@ -225,12 +220,4 @@ class Multidispatch implements ArrayAccess
         }
         return $result;
     }
-}
-
-/**
- * Factory function, PSR-4 autoloaded.
- */
-function multidispatch(): Multidispatch
-{
-    return new Multidispatch();
 }

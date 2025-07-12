@@ -35,7 +35,7 @@ This is the *simple*, “one winner” style—familiar if you’ve used Python�
 
 ```php
 require "vendor/autoload.php";
-use function Multidispatch\multidispatch;
+use function GwangJinKim\Multidispatch\multidispatch;
 
 interface IA {}
 interface IB {}
@@ -86,7 +86,7 @@ You can combine not just a *single* implementation, but also run code *before*, 
 
 ```php
 require "vendor/autoload.php";
-use function Multidispatch\multidispatch;
+use function GwangJinKim\Multidispatch\multidispatch;
 
 class Animal {}
 class Dog extends Animal {}
