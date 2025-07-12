@@ -5,10 +5,10 @@
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "Multidispatch\\": "src/Multidispatch/"
+            "GwangJinKim\\Multidispatch\\": "src/"
         },
         "files": [
-          "src/Multidispatch/Multidispatch.php"
+            "src/Functions.php"
         ]
     },
     "authors": [

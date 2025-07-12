@@ -95,12 +95,12 @@ You control which matching handler "wins" when there are multiple equally-specif
 
 ```php
 $fn = multidispatch();
-$fn->setDispatchPolicy(\Multidispatch\DispatchPolicy::FIRST_WINS);
+$fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::FirstWins);
 // ...or...
-$fn->setDispatchPolicy(\Multidispatch\DispatchPolicy::LAST_WINS);
+$fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::LastWins);
 ```
 
-Use `FIRST_WINS` for backwards compatibility or stricter method resolution.
+Use `DispatchPolicy::FirstWins` for backwards compatibility or stricter method resolution.
 
 | Policy        | Which handler wins?      | When to use                                |
 |---------------|--------------------------|--------------------------------------------|
@@ -117,7 +117,7 @@ Here’s how you use the package the “old-school” way (like before CLOS exte
 
 ```php
 require "vendor/autoload.php";
-use function Multidispatch\multidispatch;
+use function GwangJinKim\Multidispatch\multidispatch;
 
 interface IA {}
 interface IB {}
@@ -163,9 +163,9 @@ echo $fn([]); // Fallback/default handler
 
 ```php
 $fn = multidispatch();
-$fn->setDispatchPolicy(\Multidispatch\DispatchPolicy::FIRST_WINS);
+$fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::FirstWins);
 // ...or...
-$fn->setDispatchPolicy(\Multidispatch\DispatchPolicy::LAST_WINS);
+$fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::LastWins);
 ```
 
 ---
@@ -208,7 +208,7 @@ $fn[ [Type1, ...], ':around' ] = function ($callNext, $a, ...) { /* ... */ };
 
 ```php
 require "vendor/autoload.php";
-use function Multidispatch\multidispatch;
+use function GwangJinKim\Multidispatch\multidispatch;
 
 interface IA {}
 class A implements IA {}
@@ -255,7 +255,7 @@ Here is a full, extended example to clarify usage and show best practices—grea
 
 ```php
 require "vendor/autoload.php";
-use function Multidispatch\multidispatch;
+use function GwangJinKim\Multidispatch\multidispatch;
 
 // Interfaces & classes
 interface Animal {}
@@ -312,7 +312,7 @@ Audience cheers
 
 ```php
 require "vendor/autoload.php";
-use function Multidispatch\multidispatch;
+use function GwangJinKim\Multidispatch\multidispatch;
 
 // Define interfaces and classes
 interface IA {}
@@ -416,5 +416,3 @@ Try it out!**
 
 Whether you want classic dispatch, CLOS power features, or both, you’re covered.  
 Enjoy dispatching!
-
-
