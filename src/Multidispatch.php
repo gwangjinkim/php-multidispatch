@@ -10,10 +10,6 @@ use Exception;
  * Supports :primary, :before, :after, :around, with proper stacking of :around methods
  * (from least to most specific, outermost to innermost).
  */
-class DispatchPolicy {
-    public const FIRST_WINS = 'first-wins';
-    public const LAST_WINS = 'last-wins';
-}
 
 class Multidispatch implements ArrayAccess
 {
@@ -225,12 +221,4 @@ class Multidispatch implements ArrayAccess
         }
         return $result;
     }
-}
-
-/**
- * Factory function, PSR-4 autoloaded.
- */
-function multidispatch(): Multidispatch
-{
-    return new Multidispatch();
 }

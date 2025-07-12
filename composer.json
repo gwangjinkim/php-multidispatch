@@ -8,7 +8,7 @@
             "GwangJinKim\\Multidispatch\\": "src/"
         },
         "files": [
-            "src/Multidispatch.php"
+            "src/Functions.php"
         ]
     },
     "authors": [
