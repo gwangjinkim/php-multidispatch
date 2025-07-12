@@ -95,12 +95,12 @@ You control which matching handler "wins" when there are multiple equally-specif
 
 ```php
 $fn = multidispatch();
-$fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::FIRST_WINS);
+$fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::FirstWins);
 // ...or...
-$fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::LAST_WINS);
+$fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::LastWins);
 ```
 
-Use `FIRST_WINS` for backwards compatibility or stricter method resolution.
+Use `DispatchPolicy::FirstWins` for backwards compatibility or stricter method resolution.
 
 | Policy        | Which handler wins?      | When to use                                |
 |---------------|--------------------------|--------------------------------------------|
@@ -163,9 +163,9 @@ echo $fn([]); // Fallback/default handler
 
 ```php
 $fn = multidispatch();
-$fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::FIRST_WINS);
+$fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::FirstWins);
 // ...or...
-$fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::LAST_WINS);
+$fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::LastWins);
 ```
 
 ---

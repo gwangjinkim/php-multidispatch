@@ -23,7 +23,7 @@ final class MultidispatchTest extends TestCase
     public function testClassDispatch()
     {
         $fn = multidispatch();
-        $fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::FIRST_WINS); // Add this line!
+        $fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::FirstWins); // Add this line!
         $fn[[Dog::class, Dog::class]] = fn($a, $b) => 'Dog vs Dog';
         $fn[[Animal::class, Animal::class]] = fn($a, $b) => 'Animal fight';
 
@@ -61,7 +61,7 @@ final class MultidispatchTest extends TestCase
         $this->assertEquals('Y', $fn(new CB()));
 
         // Now switch to first-wins
-        $fn->setDispatchPolicy(DispatchPolicy::FIRST_WINS);
+        $fn->setDispatchPolicy(DispatchPolicy::FirstWins);
         $this->assertEquals('X', $fn(new CA())); // IA wins, registered first
         $this->assertEquals('X', $fn(new CB()));
     }
@@ -193,7 +193,7 @@ final class MultidispatchTest extends TestCase
         $this->assertEquals('B', $fn(new CA()));
 
         // Switch to first-wins
-        $fn->setDispatchPolicy(DispatchPolicy::FIRST_WINS);
+        $fn->setDispatchPolicy(DispatchPolicy::FirstWins);
         $this->assertEquals('A', $fn(new CA()));
     }
 }

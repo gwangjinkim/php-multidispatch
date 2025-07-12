@@ -19,7 +19,7 @@ class CB implements IA, IB {}
 $fn = multidispatch();
 
 // Optionally switch to first-wins for this dispatcher:
-// $fn->setDispatchPolicy(DispatchPolicy::FIRST_WINS);
+// $fn->setDispatchPolicy(DispatchPolicy::FirstWins);
 
 // Register handlers for IA and IB types. Policy controls which wins when multiple are applicable!
 $fn[['IA']] = fn($a) => "Handler for IA";
@@ -35,10 +35,10 @@ echo $fn(new CB()) . "\n"; // Same as above
 // - If "last-wins" (the default), the *last* registered handler (IB) will win for both CA and CB.
 
 // You can change the policy at any time!
-$fn->setDispatchPolicy(DispatchPolicy::FIRST_WINS);
+$fn->setDispatchPolicy(DispatchPolicy::FirstWins);
 echo "[First-wins] " . $fn(new CA()) . "\n"; // Now IA will win
 
-$fn->setDispatchPolicy(DispatchPolicy::LAST_WINS);
+$fn->setDispatchPolicy(DispatchPolicy::LastWins);
 echo "[Last-wins] " . $fn(new CB()) . "\n"; // Now IB will win
 
 // Also works for built-in types
@@ -142,8 +142,8 @@ echo $fallback("foo", 123) . "\n"; // Default for any pair!
  * - You can register for interfaces, classes, or scalar types (like 'int', 'string', etc.).
  *
  * POLICY TIP:
- *   Use $fn->setDispatchPolicy(DispatchPolicy::FIRST_WINS) if you want the first registered handler to win.
- *   Use $fn->setDispatchPolicy(DispatchPolicy::LAST_WINS) (default) for the last registered handler.
+ *   Use $fn->setDispatchPolicy(DispatchPolicy::FirstWins) if you want the first registered handler to win.
+ *   Use $fn->setDispatchPolicy(DispatchPolicy::LastWins) (default) for the last registered handler.
  *   This only affects :primary/classic style, not :before/:after/:around hooks.
  */
 
