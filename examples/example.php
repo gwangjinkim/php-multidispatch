@@ -1,8 +1,8 @@
 <?php
 
 require "vendor/autoload.php";
-use function Multidispatch\multidispatch;
-use Multidispatch\DispatchPolicy;
+use function GwangJinKim\Multidispatch\multidispatch;
+use GwangJinKim\Multidispatch\DispatchPolicy;
 
 // --- Example 1: Classic Multiple Dispatch (No CLOS Extensions) ---
 //      Demonstrates simple "one-winner" dispatch, compatible with both first-wins and last-wins policies.
