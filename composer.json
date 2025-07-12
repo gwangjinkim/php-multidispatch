@@ -15,6 +15,9 @@
         {
             "name": "Gwang-Jin Kim",
             "email": "gwang.jin.kim.phd@gmail.com"
+        },
+        {   "name": "David J. Schwarz",
+            "email": "mail+oss@davidschwarz.eu"
         }
     ],
     "minimum-stability": "stable",

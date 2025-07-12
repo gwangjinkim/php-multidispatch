@@ -397,6 +397,14 @@ If you get stuck, check out [the examples](examples/example.php) or open an issu
 
 ---
 
+## Contributors / Authors
+
+- Gwang-Jin Kim <gwang.jin.kim.phd@gmail.com>
+- David J. Schwarz <mail+oss@davidschwarz.eu>
+
+
+---
+
 ## Call to Action
 
 **Ready to write cleaner, more extensible PHP—no more “if-else soup”?  
