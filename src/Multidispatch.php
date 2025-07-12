@@ -1,6 +1,6 @@
 <?php
 
-namespace Multidispatch;
+namespace GwangJinKim\Multidispatch;
 
 use ArrayAccess;
 use Exception;

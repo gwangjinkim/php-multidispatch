@@ -1,8 +1,8 @@
 <?php
 
 use PHPUnit\Framework\TestCase;
-use function Multidispatch\multidispatch;
-use Multidispatch\DispatchPolicy;
+use function GwangJinKim\Multidispatch\multidispatch;
+use GwangJinKim\Multidispatch\DispatchPolicy;
 
 /**
  * Basic interfaces and classes for dispatch tests.
@@ -23,7 +23,7 @@ final class MultidispatchTest extends TestCase
     public function testClassDispatch()
     {
         $fn = multidispatch();
-        $fn->setDispatchPolicy(\Multidispatch\DispatchPolicy::FIRST_WINS); // Add this line!
+        $fn->setDispatchPolicy(\GwangJinKim\Multidispatch\DispatchPolicy::FIRST_WINS); // Add this line!
         $fn[[Dog::class, Dog::class]] = fn($a, $b) => 'Dog vs Dog';
         $fn[[Animal::class, Animal::class]] = fn($a, $b) => 'Animal fight';
 
