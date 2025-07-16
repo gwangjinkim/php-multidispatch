@@ -410,9 +410,9 @@ If you get stuck, check out [the examples](examples/example.php) or open an issu
 **Ready to write cleaner, more extensible PHP—no more “if-else soup”?  
 Try it out!**
 
-- ⭐ Star the [GitHub project](https://github.com/gwangjinkim/php-multidispatch)
-- 🚀 Try it out in your next side project
-- 🐞 File issues or request features or share feedback for improvements or contribute extensions
+- Please star ⭐ the [GitHub project](https://github.com/gwangjinkim/php-multidispatch)!
+- Try it out in your next side project
+- File issues or request features or share feedback for improvements or contribute extensions
 
 Whether you want classic dispatch, CLOS power features, or both, you’re covered.  
 Enjoy dispatching!
